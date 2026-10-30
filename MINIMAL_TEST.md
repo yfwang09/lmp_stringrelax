@@ -61,7 +61,7 @@ and final `replica.0.lammps` through `replica.7.lammps` configurations.
 ```bash
 string_out="$PWD/outputs/stringrelax_$(date +%Y%m%d_%H%M%S_%N)"
 python stringrelax_lammps.py "$state_a" "$state_b" \
-    --nchain 8 --nstep 10 --relax-step 5 --output "$string_out"
+    --nchain 8 --nstep 100 --relax-step 3 --output "$string_out"
 ```
 
 Runs eight images serially for 10 relax/redistribute cycles, with up to five
