@@ -1,0 +1,72 @@
+# Independent native LAMMPS NEB reference; run from the repository root.
+# MINIMAL_TEST.md gives the launch commands. Pass first (A data), last (B
+# coordinates), potential, and out with -var, or use run_neb.py STATE_A STATE_B.
+# Default 8 images: mpiexec -n 8 lmp -partition 8x1 ...
+
+# "index" defaults can be overridden by -var. replica is this partition's
+# zero-based index for endpoint constraints and per-replica filenames.
+# spring is in eV/Angstrom^2, ftol in eV/Angstrom, timestep in ps.
+# climbing_steps=0 requests ordinary NEB only.
+variable replicas index 8
+variable spring index 1.0
+variable etol index 0.0
+variable ftol index 1.0e-8
+variable ordinary_steps index 1000
+variable climbing_steps index 0 # 1000
+variable report_every index 50
+variable timestep index 0.001
+variable tmax index 10.0
+variable replica equal part
+
+# Define the same fixed periodic cell and atom model as the string.
+# The atom map lets NEB match atoms across replicas by stable ID.
+units metal
+atom_style atomic
+atom_modify map array
+boundary p p p
+read_data ${first}
+# Map data-file types to elements: type 1 is Fe, type 2 is O.
+pair_style tersoff/zbl
+pair_coeff * * ${potential} Fe O
+# Use a 2-Angstrom neighbor skin and check rebuilds every eligible step.
+neighbor 2.0 bin
+neigh_modify every 1 delay 0 check yes
+# Log total PE (not per-atom), largest force component, and full 3N force
+# norm. NEB's own progress-table interval is controlled by report_every.
+thermo 50
+thermo_style custom step pe fmax fnorm
+thermo_modify norm no
+
+# Native NEB requires damped dynamics (FIRE or Quickmin): CG line searches
+# are incompatible with its synchronized replica minimization.
+min_style fire
+timestep ${timestep}
+# FIRE can adapt up to tmax times the base timestep; the runner exposes both.
+min_modify dmax 0.01 tmax ${tmax}
+# Zero initial velocities, then apply NEB path forces to all images.
+velocity all set 0.0 0.0 0.0
+fix path all neb ${spring}
+# Zero forces on both endpoint partitions so A and B remain fixed.
+# The immediate expression in the condition evaluates the last replica index.
+if "${replica} == 0 || ${replica} == $(v_replicas-1:%.0f)" then &
+   "fix fixed_endpoint all setforce 0.0 0.0 0.0"
+
+# Write one trajectory per replica in stable ID order. xu/yu/zu include
+# periodic crossings; these frames follow optimization iterations.
+dump images all custom ${report_every} ${out}/replica.${replica}.dump id type xu yu zu
+dump_modify images sort id format float %.17g
+# Arguments: relative energy tolerance, force tolerance, ordinary/climbing
+# iteration budgets, report interval, final-endpoint coordinate file.
+# "final" initializes intermediate replicas by interpolation from A to B.
+neb ${etol} ${ftol} ${ordinary_steps} ${climbing_steps} ${report_every} final ${last}
+# Remove artificial path/endpoint forces, then refresh physical forces and
+# energy using run 0. No further relaxation occurs, including at endpoints.
+unfix path
+if "${replica} == 0 || ${replica} == $(v_replicas-1:%.0f)" then "unfix fixed_endpoint"
+run 0
+# Text columns: total PE, largest absolute force component, full force norm.
+# Export continuous positions and physical forces at full precision; nocoeff
+# omits pair coefficients because a future reload must supply the potential.
+print "$(pe:%.17g) $(fmax:%.17g) $(fnorm:%.17g)" file ${out}/final.${replica}.txt screen no
+write_dump all custom ${out}/final.${replica}.dump id type xu yu zu fx fy fz modify sort id format float %.17g
+write_data ${out}/replica.${replica}.lammps nocoeff

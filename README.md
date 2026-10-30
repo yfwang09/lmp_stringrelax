@@ -236,6 +236,37 @@ physical energy/force profile. NEB output includes `path.npy`, `path.npz`,
 conventions as the string output. Convergence diagnostics record the final
 NEB force norm separately from the exported physical atomic forces.
 
+## Visualize separately launched NEB and string runs
+
+```bash
+python plot_results.py NEB_OUTPUT_DIRECTORY STRING_OUTPUT_DIRECTORY
+```
+
+This accepts the separate directories printed by the minimal test commands,
+including a direct `in.neb` run with zero climbing iterations. It reads existing
+final snapshots, energies, and histories; neither simulation is rerun. A new
+`outputs/visualization_<timestamp>/` directory contains `results.png`/`.pdf`,
+the energy/barrier CSV files, and `neb_path.dump`/`string_path.dump`.
+
+The figure overlays final energy versus normalized arc length, plots the NEB
+and string barriers against their respective iteration counts, and shows the
+maximum NEB replica force. A string outer cycle differs from a native NEB
+iteration. The barrier includes both endpoints. Native history is read from
+every image's reported energy, with the final value checked against the fresh
+exported energies. Actual NEB iteration limits and force tolerance are read
+from the expanded command in `log.lammps.0`, rather than preparation settings.
+The zero-iteration climbing setup row is retained in the CSV and omitted from
+the iteration plots when no climbing iterations were requested.
+
+For atomic visualization, load either path dump in [OVITO Desktop](https://www.ovito.org/manual/usage/import.html)
+and use the timeline slider. Every frame is one final image along the path,
+not a relaxation timestep. Atom IDs/types and the fixed triclinic cell are
+preserved. The installed OVITO Python module is sufficient to inspect these
+files headlessly; an interactive desktop viewer is a separate application.
+
+See [MINIMAL_TEST.md](MINIMAL_TEST.md) for an end-to-end command list, including
+the output-directory variables used by this plotting command.
+
 ## Run and overlay all three cases
 
 ```bash
@@ -266,7 +297,11 @@ from the rounded universe-log energies/reaction coordinates and are exported
 as `neb/ordinary_profile_from_log.csv`. The primary `comparison.png` always
 uses the freshly evaluated final profiles, including the climbing stage.
 
-### Current calculations (2026-10-27)
+### Earlier three-case calculations (2026-10-27)
+
+These records describe the earlier batch, whose outputs were subsequently
+removed. Newly launched standalone runs can be visualized with `plot_results.py`
+without recreating that three-case directory structure.
 
 All three cases were run with eight images, 50 string cycles (five CG iterations
 per interior relaxation), and 1000 ordinary plus 1000 climbing NEB steps. Results
